@@ -25,7 +25,7 @@ do
         shift
         filetype=$1
         if [[ ${filetype} != [bcdpfls] ]]; then
-            echo "find: Arguments to -type should contain only one letter"
+            echo "find: Arguments to -type should contain only one letter" 1>&2
             exit
         fi
         shift
@@ -35,7 +35,7 @@ done
 print_if_matches() {
     if [[ ${1##*/} == $iname ]]; then
         if [[ $filetype == "" ]] ||
-           [[ ($filetype == "l" || !(-h $1)) &&
+           [[ ($filetype == "l" || ! -h $1) &&
            (($filetype == "b" && -b $1) ||
             ($filetype == "c" && -c $1) ||
             ($filetype == "d" && -d $1) ||
@@ -43,7 +43,7 @@ print_if_matches() {
             ($filetype == "f" && -f $1) ||
             ($filetype == "l" && -h $1) ||
             ($filetype == "s" && -S $1)) ]]; then
-            echo $1
+            echo "$1"
         fi
     fi
 }
@@ -51,14 +51,27 @@ print_if_matches() {
 print_dir() {
     print_if_matches $1    
 
+    if [[ ! -d $1 || -h $1 ]]; then
+        return
+    fi
+        
+    if [[ ! -r $1 ]]; then
+        echo "find: \`$1': Permission denied" 1>&2
+        return
+    fi
+
     for file in $1/*
     do
-        if [[ -d $file && !(-h $file) ]]; then
-            print_dir $file
-        else
-            print_if_matches $file
-        fi
+        if [[ ! -a "$file" ]]; then
+            continue
+        fi 
+        print_dir $file
     done
 }
 
-print_dir $path
+if [[ ! -a $path ]]; then
+    echo "find: \`$path': No such file or directory" 1>&2
+    exit
+fi
+
+print_dir ${path%/}
