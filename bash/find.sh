@@ -1,7 +1,7 @@
 #!/bin/bash
 
 shopt -s dotglob
-shopt -s nocaseglob
+shopt -s nocasematch
 
 path="."
 
