@@ -7,15 +7,21 @@ QPATH=$HOME/.nyaqueue
 mkdir -p "$QPATH"
 mkdir -p "$QPATH/requests"
 
+tmp=`mktemp -d --tmpdir="$QPATH"`
+
 for a in "$@"
 do
-    r=`mktemp --tmpdir="$QPATH/requests"`
+    r=`mktemp --tmpdir="$tmp"`
     echo "$a" > "$r"
+    mv "$r" "$QPATH/requests"
 done
 
-if [[ ! -f "$QPATH/running" ]]; then
+rm -rf $tmp
+
+wgetdaemon() {
     touch "$QPATH/running"
     trap "rm '$QPATH/running'" 0
+    trap "" SIGHUP
 
     while [ 1 ]
     do
@@ -28,4 +34,6 @@ if [[ ! -f "$QPATH/running" ]]; then
 
         sleep 1
     done
-fi
+}
+
+[[ -f "$QPATH/running" ]] || wgetdaemon 0<&- &> /dev/null &
