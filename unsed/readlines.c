@@ -42,7 +42,7 @@ int rl_close(RL *rl) {
     if (!rl)
         return 0;
 
-    if (!close(rl->fd))
+    if (close(rl->fd) != 0)
         return -1;
 
     free(rl->buf);
