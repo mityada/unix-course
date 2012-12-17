@@ -1,17 +1,19 @@
 CC=gcc
 CFLAGS=-Wall -O2
-LDFLAGS=
-
-OBJECTS=readlines-main.o readlines.o
-TARGET=readlines-main
 
 RM=rm -f
 
-$(TARGET): $(OBJECTS)
-	$(CC) $(LDFLAGS) -o $@ $(OBJECTS)
+all: readlines-main.o readlines.o
+	$(CC) -o readlines-main readlines-main.o readlines.o
+
+all-shared: readlines-main.o libreadlines.so
+	$(CC) -L. -o readlines-main readlines-main.o libreadlines.so
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $<
 
+libreadlines.so: readlines.o
+	$(CC) -shared -o $@ $<
+
 clean:
-	$(RM) $(OBJECTS) $(TARGET)
+	$(RM) readlines-main readlines-main.o readlines.o libreadlines.so
