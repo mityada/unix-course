@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <poll.h>
 
 int main()
 {
@@ -13,72 +14,81 @@ int main()
     struct addrinfo *servinfo;
     int status;
 
-    memset(&hints, 0, sizeof hints);
+    memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
-    if ((status = getaddrinfo(NULL, "3490", &hints, &servinfo)) !=0)
+    status = getaddrinfo(NULL, "3490", &hints, &servinfo);
+    if (status != 0)
     {
-        fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
         exit(1);
     }
 
-    if (servinfo == NULL)
+    struct pollfd sfds[256];
+    int nsfds = 0;
+
+    for (struct addrinfo *addr = servinfo; addr != NULL; addr = addr->ai_next)
     {
-        printf("servinfo == NULL\n");
-        exit(1);
+        int sockfd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+
+        if (sockfd == -1)
+            continue;
+
+        if (bind(sockfd, addr->ai_addr, addr->ai_addrlen) == -1)
+        {
+            close(sockfd);
+            continue;
+        }
+
+        int yes = 1;
+        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0)
+        {
+            close(sockfd);
+            continue;
+        }
+
+        if (listen(sockfd, 5) < 0)
+        {
+            close(sockfd);
+            continue;
+        }
+
+        sfds[nsfds].fd = sockfd;
+        sfds[nsfds].events = POLLIN | POLLPRI;
+        nsfds++;
     }
 
-    int sockfd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
-    if (sockfd < 0)
-    {
-        perror("sockfd < 0");
-        exit(1);
-    }
-
-    if (bind(sockfd, servinfo->ai_addr, servinfo->ai_addrlen) < 0)
-    {
-        perror("bind < 0");
-        exit(1);
-    }
-
-    int yes = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0)
-    {
-        perror("setsockopt < 0");
-        exit(1);
-    }
-
-    if (listen(sockfd, 5) < 0)
-    {
-        perror("listen < 0");
-        exit(1);
-    }
+    fprintf(stdout, "count: %d\n", nsfds);
 
     freeaddrinfo(servinfo);
 
-    while (1)
+    while (poll(sfds, nsfds, 500) != -1)
     {
-        int cfd = accept(sockfd, NULL, NULL);
-        printf("accepted, %d\n", cfd);
-        if (cfd < 0)
+        for (int i = 0; i < nsfds; i++)
         {
-            perror("fd < 0");
-            continue;
+            if (sfds[i].revents & POLLIN)
+            {
+                int cfd = accept(sfds[i].fd, NULL, NULL);
+                if (cfd == -1)
+                    continue;
+
+                int pid = fork();
+                if (pid == 0)
+                {
+                    close(sfds[i].fd);
+                    dup2(cfd, 0);
+                    dup2(cfd, 1);
+                    dup2(cfd, 2);
+                    close(cfd);
+                    execlp("bash", "bash", NULL);
+                    exit(0);
+                }
+                
+                close(cfd);
+            }
         }
-        int pid = fork();
-        if (pid == 0)
-        {
-            close(sockfd);
-            dup2(cfd, 0);
-            dup2(cfd, 1);
-            dup2(cfd, 2);
-            close(cfd);
-            execlp("bash", "bash", NULL);
-            exit(0);
-        }
-        close(cfd);
     }
 }
 
