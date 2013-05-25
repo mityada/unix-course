@@ -7,9 +7,16 @@
 #include <string.h>
 #include <unistd.h>
 #include <poll.h>
+#include <pty.h>
 
-int main()
+int main(int argc, char* argv[])
 {
+    if (argc != 2)
+    {
+        fprintf(stderr, "Usage: minissh <port>\n");
+        exit(1);
+    }
+
     struct addrinfo hints;
     struct addrinfo *servinfo;
     int status;
@@ -19,7 +26,7 @@ int main()
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
-    status = getaddrinfo(NULL, "3490", &hints, &servinfo);
+    status = getaddrinfo(NULL, argv[1], &hints, &servinfo);
     if (status != 0)
     {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
@@ -60,9 +67,13 @@ int main()
         nsfds++;
     }
 
-    fprintf(stdout, "count: %d\n", nsfds);
-
     freeaddrinfo(servinfo);
+
+    if (nsfds == 0)
+    {
+        fprintf(stderr, "No socket!\n");
+        exit(1);
+    }
 
     while (poll(sfds, nsfds, 500) != -1)
     {
@@ -74,7 +85,8 @@ int main()
                 if (cfd == -1)
                     continue;
 
-                int pid = fork();
+                int fd;
+                int pid = forkpty(&fd, NULL, NULL, NULL);
                 if (pid == 0)
                 {
                     close(sfds[i].fd);
@@ -82,7 +94,7 @@ int main()
                     dup2(cfd, 1);
                     dup2(cfd, 2);
                     close(cfd);
-                    execlp("bash", "bash", NULL);
+                    execlp("/bin/bash", "bash", NULL);
                     exit(0);
                 }
                 
@@ -91,9 +103,3 @@ int main()
         }
     }
 }
-
-
-
-
-
-
